@@ -1,0 +1,2 @@
+[console_scripts]
+rohbau-annotator = rohbau_annotator.cli:main

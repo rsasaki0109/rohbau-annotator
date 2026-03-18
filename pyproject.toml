@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rohbau-annotator"
+version = "0.1.0"
+description = "Annotation tool for Rohbau3D construction site point clouds via panorama images"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "pillow>=10.0",
+    "open3d>=0.17",
+    "click>=8.1",
+    "matplotlib>=3.7",
+    "opencv-python>=4.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1",
+]
+
+[project.scripts]
+rohbau-annotator = "rohbau_annotator.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
