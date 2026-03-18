@@ -23,7 +23,19 @@ def main() -> None:
     help="Path to an existing 2D label map (.npy) to continue editing.",
 )
 @click.option("--brush-radius", type=int, default=10, help="Initial brush radius in pixels.")
-def annotate(scan_dir: str, label_map: str | None, brush_radius: int) -> None:
+@click.option("--sam2", is_flag=True, default=False, help="Enable SAM2 semi-automatic segmentation.")
+@click.option("--sam2-checkpoint", type=click.Path(), default="sam2_hiera_tiny.pt", help="Path to SAM2 checkpoint file.")
+@click.option("--sam2-model-cfg", type=str, default="sam2_hiera_t", help="SAM2 model config name.")
+@click.option("--sam2-device", type=str, default="cpu", help="Device for SAM2 inference (cpu or cuda).")
+def annotate(
+    scan_dir: str,
+    label_map: str | None,
+    brush_radius: int,
+    sam2: bool,
+    sam2_checkpoint: str,
+    sam2_model_cfg: str,
+    sam2_device: str,
+) -> None:
     """Launch the panorama annotation UI for a scan directory."""
     from rohbau_annotator.annotator import annotate_scan, save_label_map
     from rohbau_annotator.loader import load_scan
@@ -37,6 +49,23 @@ def annotate(scan_dir: str, label_map: str | None, brush_radius: int) -> None:
         existing = np.load(label_map)
         click.echo(f"Loaded existing label map from {label_map}")
 
+    # Initialize SAM2 assistant if requested
+    sam_assistant = None
+    if sam2:
+        from rohbau_annotator.sam_assistant import SAMAssistant, is_sam2_available
+
+        if not is_sam2_available():
+            raise click.ClickException(
+                "SAM2 is not installed. Install with: pip install -e '.[sam2]'"
+            )
+        click.echo(f"Loading SAM2 model ({sam2_model_cfg}) on {sam2_device}...")
+        sam_assistant = SAMAssistant(
+            model_cfg=sam2_model_cfg,
+            checkpoint=sam2_checkpoint,
+            device=sam2_device,
+        )
+        click.echo("SAM2 loaded. Use the SAM2 button in the UI to toggle mode.")
+
     click.echo(f"Scan: {scan.scan_dir.name}  |  {scan.num_points} points  |  panorama {scan.panorama_shape}")
     click.echo("Close the annotation window to save.")
 
@@ -45,6 +74,7 @@ def annotate(scan_dir: str, label_map: str | None, brush_radius: int) -> None:
         points=scan.coord,
         existing_labels=existing,
         brush_radius=brush_radius,
+        sam_assistant=sam_assistant,
     )
 
     out_dir = Path(scan_dir)
