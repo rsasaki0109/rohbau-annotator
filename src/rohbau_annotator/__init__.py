@@ -1,3 +1,3 @@
-"""Rohbau Annotator - Annotation tool for Rohbau3D construction site point clouds."""
+"""Rohbau Annotator - Universal TLS point cloud annotator with SAM2."""
 
 __version__ = "0.1.0"
