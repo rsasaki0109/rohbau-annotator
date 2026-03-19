@@ -1,16 +1,105 @@
 # rohbau-annotator
 
+[![CI](https://github.com/rsasaki0109/rohbau-annotator/actions/workflows/ci.yml/badge.svg)](https://github.com/rsasaki0109/rohbau-annotator/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Annotation tool for [Rohbau3D](https://github.com/2KangHo/Rohbau3D) construction site point clouds.
 Annotate on 2D panorama images and back-project labels to 3D point clouds using equirectangular spherical projection.
 
+## Workflow
+
+```
+                        ┌──────────────────┐
+                        │  Rohbau3D Scan   │
+                        │  coord.npy       │
+                        │  img_color.png   │
+                        └────────┬─────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │  Equirectangular         │
+                    │  Spherical Projection    │
+                    │  (3D → 2D panorama)      │
+                    └────────────┬─────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │  Interactive 2D          │
+                    │  Annotation (matplotlib) │
+                    │  → label_2d.npy          │
+                    └────────────┬─────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │  Back-projection         │
+                    │  (2D → 3D labels)        │
+                    │  → label_3d.npy          │
+                    └──────────────────────────┘
+```
+
+## Projection Formula
+
+The tool uses equirectangular spherical projection to map between 3D point cloud coordinates and 2D panorama pixel positions.
+
+### Forward Projection (3D to 2D)
+
+Given a 3D point `(x, y, z)`, compute spherical coordinates:
+
+```
+r         = sqrt(x² + y² + z²)
+azimuth   = atan2(y, x)            ∈ [-π, π]
+elevation = arcsin(z / r)          ∈ [-π/2, π/2]
+```
+
+Map to panorama pixel coordinates `(u, v)` for an image of size `W × H`:
+
+```
+u = (π - azimuth)   / (2π) × W    column ∈ [0, W)
+v = (π/2 - elevation) / π  × H    row    ∈ [0, H)
+```
+
+### Back-projection (2D to 3D)
+
+Given pixel coordinates `(u, v)` and depth `d`:
+
+```
+azimuth   = π   - (u / W) × 2π
+elevation = π/2 - (v / H) × π
+
+x = d × cos(elevation) × cos(azimuth)
+y = d × cos(elevation) × sin(azimuth)
+z = d × sin(elevation)
+```
+
 ## Semantic Classes
 
-wall, floor, ceiling, column, beam, door, window, pipe, duct, cable_tray, rebar, formwork, other
+The tool defines 13 annotatable semantic classes for construction site elements (plus unlabeled):
+
+| ID | Name | Color |
+|----|------|-------|
+| 0 | unlabeled | (0, 0, 0) |
+| 1 | wall | (174, 199, 232) |
+| 2 | floor | (152, 223, 138) |
+| 3 | ceiling | (31, 119, 180) |
+| 4 | column | (255, 187, 120) |
+| 5 | beam | (188, 189, 34) |
+| 6 | door | (140, 86, 75) |
+| 7 | window | (255, 152, 150) |
+| 8 | pipe | (214, 39, 40) |
+| 9 | duct | (197, 176, 213) |
+| 10 | cable_tray | (148, 103, 189) |
+| 11 | rebar | (196, 156, 148) |
+| 12 | formwork | (23, 190, 207) |
+| 13 | other | (127, 127, 127) |
 
 ## Installation
 
 ```bash
 pip install -e .
+```
+
+For development (includes pytest and ruff):
+
+```bash
+pip install -e ".[dev]"
 ```
 
 ## Usage
@@ -47,15 +136,10 @@ Each scan directory must contain:
 | `normal.npy` | (N, 3) | Surface normals |
 | `img_color.png` | (H, W, 3) | Panorama color image |
 
-## Projection
+## Running Tests
 
-Uses equirectangular spherical projection:
-
-```
-azimuth   = atan2(y, x)
-elevation = arcsin(z / r)
-u = (pi - azimuth) / (2*pi) * W
-v = (pi/2 - elevation) / pi * H
+```bash
+pytest -v tests/
 ```
 
 ## License
