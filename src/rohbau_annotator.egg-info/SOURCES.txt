@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/rohbau_annotator/__init__.py
+src/rohbau_annotator/annotator.py
+src/rohbau_annotator/classes.py
+src/rohbau_annotator/cli.py
+src/rohbau_annotator/loader.py
+src/rohbau_annotator/projection.py
+src/rohbau_annotator.egg-info/PKG-INFO
+src/rohbau_annotator.egg-info/SOURCES.txt
+src/rohbau_annotator.egg-info/dependency_links.txt
+src/rohbau_annotator.egg-info/entry_points.txt
+src/rohbau_annotator.egg-info/requires.txt
+src/rohbau_annotator.egg-info/top_level.txt
