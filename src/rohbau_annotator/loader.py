@@ -1,4 +1,4 @@
-"""Load Rohbau3D .npy files and panorama images.
+"""Load point cloud data from Rohbau3D .npy directories or single files (PLY/PCD/LAS).
 
 Rohbau3D data layout per scan directory:
     coord.npy       (N, 3)  float64  XYZ coordinates
@@ -9,6 +9,8 @@ Rohbau3D data layout per scan directory:
     img_depth.png            panorama depth image
     img_intensity.png        panorama intensity image
     img_normal.png           panorama normal image
+
+Single-file formats (PLY, PCD, LAS/LAZ) are also supported via the importers module.
 """
 
 from __future__ import annotations
@@ -23,13 +25,17 @@ from PIL import Image
 
 @dataclass
 class Rohbau3DScan:
-    """A single Rohbau3D scan with point cloud data and panorama images."""
+    """A loaded point cloud scan with optional panorama images.
+
+    Works with both Rohbau3D .npy directories and single-file point clouds.
+    """
 
     scan_dir: Path
     coord: np.ndarray           # (N, 3) float64
     color: np.ndarray           # (N, 3) uint8
     intensity: np.ndarray       # (N, 1) float64
     normal: np.ndarray          # (N, 3) float64
+    source_file: Optional[Path] = None  # set when loaded from a single file
     img_color: Optional[np.ndarray] = None       # (H, W, 3) uint8
     img_depth: Optional[np.ndarray] = None       # (H, W) or (H, W, 3)
     img_intensity: Optional[np.ndarray] = None   # (H, W) or (H, W, 3)
@@ -46,13 +52,15 @@ class Rohbau3DScan:
         return None
 
 
-def load_scan(scan_dir: str | Path) -> Rohbau3DScan:
-    """Load a Rohbau3D scan from a directory.
+def load_scan(path: str | Path) -> Rohbau3DScan:
+    """Load a point cloud scan from a directory or single file.
 
     Parameters
     ----------
-    scan_dir : str or Path
-        Path to a scan directory containing .npy files and panorama images.
+    path : str or Path
+        Path to either:
+        - A Rohbau3D scan directory containing .npy files and panorama images.
+        - A single point cloud file (.ply, .pcd, .las, .laz).
 
     Returns
     -------
@@ -62,12 +70,22 @@ def load_scan(scan_dir: str | Path) -> Rohbau3DScan:
     Raises
     ------
     FileNotFoundError
-        If required .npy files are missing.
+        If the path does not exist or required files are missing.
+    ValueError
+        If a single file has an unsupported extension.
     """
-    scan_dir = Path(scan_dir)
-    if not scan_dir.is_dir():
-        raise FileNotFoundError(f"Scan directory not found: {scan_dir}")
+    path = Path(path)
 
+    if path.is_dir():
+        return _load_npy_directory(path)
+    elif path.is_file():
+        return _load_single_file(path)
+    else:
+        raise FileNotFoundError(f"Path not found: {path}")
+
+
+def _load_npy_directory(scan_dir: Path) -> Rohbau3DScan:
+    """Load a Rohbau3D scan from a directory of .npy files."""
     # Required point cloud arrays
     coord_path = scan_dir / "coord.npy"
     color_path = scan_dir / "color.npy"
@@ -99,6 +117,28 @@ def load_scan(scan_dir: str | Path) -> Rohbau3DScan:
         img_depth=img_depth,
         img_intensity=img_intensity,
         img_normal=img_normal,
+    )
+
+
+def _load_single_file(file_path: Path) -> Rohbau3DScan:
+    """Load a scan from a single PLY/PCD/LAS file."""
+    from rohbau_annotator.importers import auto_import, is_supported_file
+
+    if not is_supported_file(file_path):
+        raise ValueError(
+            f"Unsupported file format: {file_path.suffix}. "
+            "Use a Rohbau3D directory or a PLY/PCD/LAS file."
+        )
+
+    coord, color, intensity, normal = auto_import(file_path)
+
+    return Rohbau3DScan(
+        scan_dir=file_path.parent,
+        coord=coord,
+        color=color,
+        intensity=intensity,
+        normal=normal,
+        source_file=file_path,
     )
 
 

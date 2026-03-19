@@ -4,35 +4,127 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Annotation tool for [Rohbau3D](https://github.com/2KangHo/Rohbau3D) construction site point clouds.
-Annotate on 2D panorama images and back-project labels to 3D point clouds using equirectangular spherical projection.
+Universal TLS Point Cloud Annotator with SAM2.
+
+Annotate on 2D panorama images and back-project labels to 3D point clouds using equirectangular spherical projection. Supports **PLY**, **PCD**, **LAS/LAZ** single files as well as [Rohbau3D](https://github.com/2KangHo/Rohbau3D) `.npy` directories.
+
+## Supported Input Formats
+
+| Format | Extension | Library |
+|--------|-----------|---------|
+| PLY | `.ply` | Open3D |
+| PCD | `.pcd` | Open3D |
+| LAS/LAZ | `.las`, `.laz` | laspy |
+| Rohbau3D | directory with `.npy` files | NumPy |
 
 ## Workflow
 
 ```
-                        ┌──────────────────┐
-                        │  Rohbau3D Scan   │
-                        │  coord.npy       │
-                        │  img_color.png   │
-                        └────────┬─────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │  Equirectangular         │
-                    │  Spherical Projection    │
-                    │  (3D → 2D panorama)      │
-                    └────────────┬─────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │  Interactive 2D          │
-                    │  Annotation (matplotlib) │
-                    │  → label_2d.npy          │
-                    └────────────┬─────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │  Back-projection         │
-                    │  (2D → 3D labels)        │
-                    │  → label_3d.npy          │
-                    └──────────────────────────┘
+     ┌──────────────────────────┐
+     │  Point Cloud Input       │
+     │  PLY / PCD / LAS / .npy  │
+     └────────────┬─────────────┘
+                  │
+     ┌────────────▼────────────┐
+     │  Equirectangular         │
+     │  Spherical Projection    │
+     │  (3D → 2D panorama)      │
+     └────────────┬─────────────┘
+                  │
+     ┌────────────▼────────────┐
+     │  Interactive 2D          │
+     │  Annotation (matplotlib) │
+     │  + optional SAM2         │
+     │  → label_2d.npy          │
+     └────────────┬─────────────┘
+                  │
+     ┌────────────▼────────────┐
+     │  Back-projection         │
+     │  (2D → 3D labels)        │
+     │  → .npy / .ply / .las    │
+     └──────────────────────────┘
+```
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+For development (includes pytest and ruff):
+
+```bash
+pip install -e ".[dev]"
+```
+
+For SAM2 semi-automatic segmentation support:
+
+```bash
+pip install -e ".[sam2]"
+```
+
+You also need a SAM2 checkpoint file (e.g., `sam2_hiera_tiny.pt`).
+Download from the [SAM2 repository](https://github.com/facebookresearch/segment-anything-2).
+
+## Usage
+
+### Annotate a Rohbau3D scan directory
+
+```bash
+rohbau-annotator annotate /path/to/scan_dir
+```
+
+### Annotate a PLY file
+
+```bash
+rohbau-annotator annotate /path/to/scan.ply
+```
+
+### Annotate a PCD file
+
+```bash
+rohbau-annotator annotate /path/to/scan.pcd
+```
+
+### Annotate a LAS file
+
+```bash
+rohbau-annotator annotate /path/to/scan.las
+```
+
+Opens a matplotlib window showing the panorama image. Paint regions with the selected class label using the mouse. Close the window to save `label_2d.npy` and `label_3d.npy` alongside the input.
+
+### Export 3D labels from existing 2D annotations
+
+```bash
+# Default: export as .npy
+rohbau-annotator export /path/to/scan_dir
+
+# Export as labeled PLY with per-point label field
+rohbau-annotator export /path/to/scan.ply -f ply -o labeled_output.ply
+
+# Export as LAS with classification field
+rohbau-annotator export /path/to/scan.las -f las -o labeled_output.las
+```
+
+### Annotate with SAM2 assistance
+
+```bash
+rohbau-annotator annotate /path/to/scan.ply --sam2 --sam2-checkpoint /path/to/sam2_hiera_tiny.pt
+```
+
+In the annotation window, click the **SAM2** button to toggle SAM2 mode:
+
+- **Left click** adds a foreground point (green `+`)
+- **Right click** adds a background point (red `x`)
+- SAM2 proposes a mask overlay after each click
+- **Enter** accepts the mask (writes it to the label map with the selected class)
+- **Escape** rejects the mask and clears all prompt points
+
+### View annotation statistics
+
+```bash
+rohbau-annotator stats /path/to/scan_dir
 ```
 
 ## Projection Formula
@@ -90,66 +182,9 @@ The tool defines 13 annotatable semantic classes for construction site elements 
 | 12 | formwork | (23, 190, 207) |
 | 13 | other | (127, 127, 127) |
 
-## Installation
-
-```bash
-pip install -e .
-```
-
-For development (includes pytest and ruff):
-
-```bash
-pip install -e ".[dev]"
-```
-
-For SAM2 semi-automatic segmentation support:
-
-```bash
-pip install -e ".[sam2]"
-```
-
-You also need a SAM2 checkpoint file (e.g., `sam2_hiera_tiny.pt`).
-Download from the [SAM2 repository](https://github.com/facebookresearch/segment-anything-2).
-
-## Usage
-
-### Annotate a scan
-
-```bash
-rohbau-annotator annotate /path/to/scan_dir
-```
-
-Opens a matplotlib window showing the panorama image. Paint regions with the selected class label using the mouse. Close the window to save `label_2d.npy` and `label_3d.npy` in the scan directory.
-
-### Export 3D labels from existing 2D annotations
-
-```bash
-rohbau-annotator export /path/to/scan_dir
-```
-
-### Annotate with SAM2 assistance
-
-```bash
-rohbau-annotator annotate /path/to/scan_dir --sam2 --sam2-checkpoint /path/to/sam2_hiera_tiny.pt
-```
-
-In the annotation window, click the **SAM2** button to toggle SAM2 mode:
-
-- **Left click** adds a foreground point (green `+`)
-- **Right click** adds a background point (red `x`)
-- SAM2 proposes a mask overlay after each click
-- **Enter** accepts the mask (writes it to the label map with the selected class)
-- **Escape** rejects the mask and clears all prompt points
-
-The `sam2-hiera-tiny` model is used by default for speed. You can specify a different model config with `--sam2-model-cfg`.
-
-### View annotation statistics
-
-```bash
-rohbau-annotator stats /path/to/scan_dir
-```
-
 ## Data Format
+
+### Rohbau3D directory
 
 Each scan directory must contain:
 
@@ -160,6 +195,10 @@ Each scan directory must contain:
 | `intensity.npy` | (N, 1) | Laser intensity |
 | `normal.npy` | (N, 3) | Surface normals |
 | `img_color.png` | (H, W, 3) | Panorama color image |
+
+### Single-file point clouds
+
+PLY, PCD, and LAS/LAZ files are loaded directly. Coordinates, colors, and normals are extracted where available; missing fields default to zeros.
 
 ## Running Tests
 

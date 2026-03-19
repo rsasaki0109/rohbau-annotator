@@ -11,11 +11,14 @@ import numpy as np
 @click.group()
 @click.version_option(package_name="rohbau-annotator")
 def main() -> None:
-    """Rohbau Annotator -- annotate Rohbau3D construction site point clouds."""
+    """Universal TLS Point Cloud Annotator with SAM2.
+
+    Annotate Rohbau3D .npy directories, PLY, PCD, or LAS/LAZ point clouds.
+    """
 
 
 @main.command()
-@click.argument("scan_dir", type=click.Path(exists=True, file_okay=False))
+@click.argument("scan_path", type=click.Path(exists=True))
 @click.option(
     "--label-map",
     type=click.Path(),
@@ -28,7 +31,7 @@ def main() -> None:
 @click.option("--sam2-model-cfg", type=str, default="sam2_hiera_t", help="SAM2 model config name.")
 @click.option("--sam2-device", type=str, default="cpu", help="Device for SAM2 inference (cpu or cuda).")
 def annotate(
-    scan_dir: str,
+    scan_path: str,
     label_map: str | None,
     brush_radius: int,
     sam2: bool,
@@ -36,13 +39,21 @@ def annotate(
     sam2_model_cfg: str,
     sam2_device: str,
 ) -> None:
-    """Launch the panorama annotation UI for a scan directory."""
+    """Launch the panorama annotation UI for a scan directory or point cloud file.
+
+    SCAN_PATH can be a Rohbau3D directory (containing .npy files) or a single
+    PLY/PCD/LAS file.
+    """
     from rohbau_annotator.annotator import annotate_scan, save_label_map
     from rohbau_annotator.loader import load_scan
 
-    scan = load_scan(scan_dir)
+    scan = load_scan(scan_path)
     if scan.img_color is None:
-        raise click.ClickException("No img_color.png found in scan directory.")
+        raise click.ClickException(
+            "No panorama image found. "
+            "Rohbau3D directories require img_color.png; "
+            "single-file point clouds do not include panorama images."
+        )
 
     existing = None
     if label_map is not None:
@@ -77,7 +88,7 @@ def annotate(
         sam_assistant=sam_assistant,
     )
 
-    out_dir = Path(scan_dir)
+    out_dir = Path(scan_path) if Path(scan_path).is_dir() else Path(scan_path).parent
     label_2d_path = out_dir / "label_2d.npy"
     label_3d_path = out_dir / "label_3d.npy"
 
@@ -89,7 +100,7 @@ def annotate(
 
 
 @main.command()
-@click.argument("scan_dir", type=click.Path(exists=True, file_okay=False))
+@click.argument("scan_path", type=click.Path(exists=True))
 @click.option(
     "--output",
     "-o",
@@ -97,13 +108,25 @@ def annotate(
     default=None,
     help="Output path for 3D labels .npy.  Defaults to <scan_dir>/label_3d.npy.",
 )
-def export(scan_dir: str, output: str | None) -> None:
-    """Export 2D panorama annotations to 3D point cloud labels."""
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    type=click.Choice(["npy", "ply", "las"]),
+    default="npy",
+    help="Output format: npy (default), ply (with label field), or las (classification).",
+)
+def export(scan_path: str, output: str | None, output_format: str) -> None:
+    """Export 2D panorama annotations to 3D point cloud labels.
+
+    SCAN_PATH can be a Rohbau3D directory or a single PLY/PCD/LAS file.
+    """
     from rohbau_annotator.loader import load_scan
     from rohbau_annotator.projection import build_panorama_label_map
 
-    scan = load_scan(scan_dir)
-    label_2d_path = Path(scan_dir) / "label_2d.npy"
+    scan = load_scan(scan_path)
+    scan_dir = Path(scan_path) if Path(scan_path).is_dir() else Path(scan_path).parent
+    label_2d_path = scan_dir / "label_2d.npy"
 
     if not label_2d_path.exists():
         raise click.ClickException(f"No label_2d.npy found in {scan_dir}. Run 'annotate' first.")
@@ -114,22 +137,35 @@ def export(scan_dir: str, output: str | None) -> None:
     click.echo(f"Back-projecting {img_h}x{img_w} label map to {scan.num_points} points...")
     label_3d = build_panorama_label_map(label_2d, scan.coord, img_h, img_w)
 
-    out_path = Path(output) if output else Path(scan_dir) / "label_3d.npy"
-    np.save(str(out_path), label_3d)
-    click.echo(f"Saved 3D labels: {out_path}")
+    if output_format == "npy":
+        out_path = Path(output) if output else scan_dir / "label_3d.npy"
+        np.save(str(out_path), label_3d)
+        click.echo(f"Saved 3D labels: {out_path}")
+    elif output_format == "ply":
+        from rohbau_annotator.exporters import export_labeled_ply
+
+        out_path = Path(output) if output else scan_dir / "labeled.ply"
+        export_labeled_ply(scan.coord, label_3d, out_path, colors=scan.color)
+        click.echo(f"Saved labeled PLY: {out_path}")
+    elif output_format == "las":
+        from rohbau_annotator.exporters import export_labeled_las
+
+        out_path = Path(output) if output else scan_dir / "labeled.las"
+        export_labeled_las(scan.coord, label_3d, out_path, colors=scan.color)
+        click.echo(f"Saved labeled LAS: {out_path}")
 
 
 @main.command()
-@click.argument("scan_dir", type=click.Path(exists=True, file_okay=False))
-def stats(scan_dir: str) -> None:
-    """Show annotation statistics for a scan directory."""
+@click.argument("scan_path", type=click.Path(exists=True))
+def stats(scan_path: str) -> None:
+    """Show annotation statistics for a scan directory or point cloud file."""
     from rohbau_annotator.classes import CLASS_BY_ID
 
-    scan_path = Path(scan_dir)
-    label_2d_path = scan_path / "label_2d.npy"
-    label_3d_path = scan_path / "label_3d.npy"
+    scan_dir = Path(scan_path) if Path(scan_path).is_dir() else Path(scan_path).parent
+    label_2d_path = scan_dir / "label_2d.npy"
+    label_3d_path = scan_dir / "label_3d.npy"
 
-    click.echo(f"Scan: {scan_path.name}")
+    click.echo(f"Scan: {scan_dir.name}")
 
     if label_2d_path.exists():
         label_2d = np.load(str(label_2d_path))
