@@ -102,6 +102,15 @@ For development (includes pytest and ruff):
 pip install -e ".[dev]"
 ```
 
+For SAM2 semi-automatic segmentation support:
+
+```bash
+pip install -e ".[sam2]"
+```
+
+You also need a SAM2 checkpoint file (e.g., `sam2_hiera_tiny.pt`).
+Download from the [SAM2 repository](https://github.com/facebookresearch/segment-anything-2).
+
 ## Usage
 
 ### Annotate a scan
@@ -117,6 +126,22 @@ Opens a matplotlib window showing the panorama image. Paint regions with the sel
 ```bash
 rohbau-annotator export /path/to/scan_dir
 ```
+
+### Annotate with SAM2 assistance
+
+```bash
+rohbau-annotator annotate /path/to/scan_dir --sam2 --sam2-checkpoint /path/to/sam2_hiera_tiny.pt
+```
+
+In the annotation window, click the **SAM2** button to toggle SAM2 mode:
+
+- **Left click** adds a foreground point (green `+`)
+- **Right click** adds a background point (red `x`)
+- SAM2 proposes a mask overlay after each click
+- **Enter** accepts the mask (writes it to the label map with the selected class)
+- **Escape** rejects the mask and clears all prompt points
+
+The `sam2-hiera-tiny` model is used by default for speed. You can specify a different model config with `--sam2-model-cfg`.
 
 ### View annotation statistics
 
