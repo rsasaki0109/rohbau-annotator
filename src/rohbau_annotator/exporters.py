@@ -83,6 +83,12 @@ def export_labeled_las(
     output_path = Path(output_path)
 
     header = laspy.LasHeader(point_format=2, version="1.2")
+    header.scales = [0.0001, 0.0001, 0.0001]
+    header.offsets = [
+        float(coord[:, 0].mean()),
+        float(coord[:, 1].mean()),
+        float(coord[:, 2].mean()),
+    ]
     las = laspy.LasData(header)
 
     las.x = coord[:, 0]
